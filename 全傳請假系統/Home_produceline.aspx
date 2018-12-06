@@ -18,7 +18,7 @@
         .col-xs-8, .col-sm-8, .col-md-8, .col-lg-8,
         .col-xs-9, .col-sm-9, .col-md-9, .col-lg-9,
         .col-xs-10, .col-sm-10, .col-md-10, .col-lg-10,
-        .col-xs-11, .col-sm-11, .col-md-11, .col-lg-11,
+        .col-xs-11, .col-sm-11, .col-md-11, .col-lg-11, 
         .col-xs-12, .col-sm-12, .col-md-12, .col-lg-12 {
             position: relative;
             min-height: 1px;
