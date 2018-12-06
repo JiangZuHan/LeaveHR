@@ -1,0 +1,235 @@
+﻿<%@ Master Language="C#" AutoEventWireup="true" CodeBehind="請假主版.master.cs" Inherits="全傳請假系統.請假主版" %>
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <!-- 每一次抓的資料都要新的  不抓取舊的資料 -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <!--  強迫IE使用最新的版本開啟， 版本太舊可能會造成網頁壞掉  -->
+    <title>請假系統</title>
+
+    <link href="CSS/bootstrap/bootstrap.min.css" rel="stylesheet" />
+    <link href="CSS/bootstrap-table/bootstrap-table.css" rel="stylesheet" />
+    <link href="CSS/select2/select2.css" rel="stylesheet" />
+    <link href="CSS/JQuery.JSAjaxFileUploader.css" rel="stylesheet" />
+    <link href="CSS/jquery.isloading.css" rel="stylesheet" />
+    <link href="CSS/bootstrap-datetimepicker.min.css" rel="stylesheet" />
+    <script src="<%=ResolveClientUrl("~/js/jquery/jquery-1.11.3.min.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/bootstrap.min.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/bootstrap-table/bootstrap-table.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/jquery/WdatePicker.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/select2/select2.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/JQuery.JSAjaxFileUploader.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/jquery.isloading.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/bootstrap-datetimepicker.min.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/bootstrap-datetimepicker.zh-TW.js")%>"></script>
+    <script src="<%=ResolveClientUrl("~/js/TimeFormat.js")%>"></script>
+
+    <script type="text/javascript">
+
+        var _Holiday = {
+            NeedWorkHoliday: [],
+            Vacation: [],
+            GetData: function () {
+                $.ajax({
+                    type: 'POST',
+                    url: 'Tools/process.ashx?mode=GetWorkHoliday',
+                    async: false,
+                    cache: false,
+                    success: (function (response) {
+                        response = JSON.parse(response);
+                        if (response.msg == '') {
+                            _Holiday.NeedWorkHoliday = $.map(response.data.WorkHoliday, function (z) { return new Date(z['BS73002']).Format('yyyy/MM/dd') });
+                            _Holiday.Vacation = $.map(response.data.Vacation, function (z) { return new Date(z['BS73002']).Format('yyyy/MM/dd') });
+                        } else {
+                            alert(response.msg);
+                        }
+                    })
+                });
+            }
+        };
+
+        //初始化 取得補班日期
+        _Holiday.GetData();
+        $(document).ready(function () {
+
+
+
+            //導覽列navbar
+            $.ajax({
+                type: 'POST',
+                url: 'Tools/leaveuser.ashx?pass=navbar',
+                async: true
+            }).then(function (data) {
+
+                $('#cnname').append($('<span>' + data + '</span>'));
+            });
+
+            //導覽列navbar
+            $.ajax({
+                type: 'POST',
+                url: 'Tools/MasterPage.ashx?t=Update_NavBar_bos',
+                async: true
+            }).then(function (data) {
+
+                eval(data);
+
+            })
+
+        });
+
+        //登出鈕
+        function logoutbtn() {
+            var r = confirm("確定要登出嗎？")
+            if (r == true) {
+                $.ajax({
+                    type: 'POST',
+                    url: 'Tools/leaveuser.ashx?pass=logout',
+                    success: function () {
+                        location.href = 'Login.aspx';
+                    }
+                });
+            }
+        }
+        $(document).mouseup(function () {
+            $('#bs-example-navbar-collapse-1').collapse('hide');
+        });
+
+
+    </script>
+
+    <style type="text/css">
+        body {
+            padding-top: 120px;
+        }
+
+        td, th, yee {
+            text-align: center;
+        }
+
+        .hiddencol {
+            display: none;
+        }
+
+        #ontopDiv { /*nav-tabs*/
+            position: fixed;
+            top: 50px;
+            left: auto;
+            right: auto;
+            width: 100%;
+            height: 58px;
+            z-index: 500; /*指定物件的層級*/
+            background-color: white;
+            border-width: 0px;
+            border-style: solid;
+            padding: 15px;
+            font-size: 16px;
+            -webkit-box-shadow: inset 0 4px 4px rgba(0,0,0,.08);
+        }
+
+
+        #Button5 {
+            background: #9d9d9d;
+            width: 50px;
+            height: 28px;
+            border: 0px;
+            border-radius: 15px; /*導R角*/
+            color: black; /*#fbd1d1 紅色*/
+            font-size: 13px;
+            position: relative;
+            bottom: 4px;
+        }
+
+            #Button5:hover {
+                background-color: white; /*#b50000 深紅色*/
+            }
+
+        #navbar-header {
+            color: black;
+        }
+
+            #navbar-header:hover {
+                position: relative;
+                top: 2px;
+                left: 2px;
+                color: #e21b1b;
+            }
+
+        @media (min-width: 768px) {
+            .navbar-nav {
+                margin-top: 12px;
+            }
+        }
+
+        @media (max-width: 420px) {
+            #ontopDiv ul { /*nav-tabs*/
+                position: fixed;
+                top: 50px;
+                left: auto;
+                right: 5px;
+                width: 100%;
+                height: 58px;
+                z-index: 500; /*指定物件的層級*/
+                background-color: white;
+                border-width: 1px;
+                border-style: ridge;
+                padding: 15px;
+                -webkit-box-shadow: inset 0 4px 4px rgba(0,0,0,.08);
+            }
+
+                #ontopDiv ul li a {
+                    padding: 0 15px;
+                    font-size: 12px;
+                    line-height: 40px;
+                }
+        }
+    </style>
+    <asp:ContentPlaceHolder ID="head" runat="server">
+    </asp:ContentPlaceHolder>
+
+</head>
+<body>
+    <form id="form1" runat="server">
+        <div>
+            <%--<h3>123456</h3>--%>
+            <nav class="navbar navbar-inverse navbar-fixed-top">
+                <div class="container-fluid">
+                    <div class="navbar-header">
+                        <button type="button" id="collapse" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="true">
+                            <span class="sr-only">Toggle navigation</span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                        </button>
+                        <a class="navbar-brand" href="Home.aspx" style="color: white;">全球傳動請假系統</a>
+
+                    </div>
+
+                    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1" aria-expanded="true">
+                        <div class="container-fluid">
+                            <ul class="nav navbar-nav navbar-right">
+                                <label class="form-label" id="cnname" style="color: white;"></label>
+                                <button type="button" class="btn btn-primary" id="Button5" onclick="logoutbtn()">登出</button>
+                            </ul>
+                        </div>
+                        <!-- container -->
+                    </div>
+                    <!-- /.navbar-collapse -->
+                </div>
+                <!-- /.container-fluid -->
+            </nav>
+        </div>
+        <div>
+            <asp:ContentPlaceHolder ID="ContentPlaceHolder1" runat="server">
+            </asp:ContentPlaceHolder>
+        </div>
+
+
+    </form>
+
+</body>
+</html>

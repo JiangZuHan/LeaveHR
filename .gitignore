@@ -241,5 +241,6 @@ ModelManifest.xml
 # FAKE - F# Make
 .fake/
 
-
 Web.config
+/全傳請假系統/Web.Release.config
+/全傳請假系統/Web.Debug.config

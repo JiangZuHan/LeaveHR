@@ -1,0 +1,182 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Web;
+
+
+namespace HR.DBUtility
+{
+    public class BOSSQL
+    {
+        public static SqlConnection connection()
+        {
+            SqlConnection con = new SqlConnection(ConfigurationManager.ConnectionStrings["tbiConnectionString"].ConnectionString);
+            return con;
+        }
+
+        private static SqlConnection GetConn()
+        {
+            SqlConnection conn = connection();
+
+            if (conn.State == ConnectionState.Closed)
+            {
+                conn.Open();
+            }
+            return conn;
+        }
+
+        private static void OutConn()
+        {
+
+            using (SqlConnection conn = connection())
+            {
+                if (conn.State == ConnectionState.Open)
+                {
+                    conn.Close();
+                }
+            }
+
+        }
+        public static DataTable ExecuteQuery(string cmdText)
+        {
+            SqlCommand cmd = new SqlCommand();
+
+            DataTable dt = new DataTable();
+            cmd = new SqlCommand(cmdText, GetConn());
+            using (SqlDataReader sdr = cmd.ExecuteReader(CommandBehavior.CloseConnection))
+            {
+                try
+                {
+                    dt.Load(sdr);
+                }
+                catch (Exception ex)
+                {
+
+                }
+                finally
+                {
+                    sdr.Close();
+                    cmd.Dispose();
+                    OutConn();
+                }
+            }
+
+            return dt;
+        }
+        public static SqlConnection hrsconnection()
+        {
+            SqlConnection con = new SqlConnection(ConfigurationManager.ConnectionStrings["hrsConnectionString"].ConnectionString);
+            return con;
+        }
+
+        private static SqlConnection hrsGetConn()
+        {
+            SqlConnection conn = hrsconnection();
+
+            if (conn.State == ConnectionState.Closed)
+            {
+                conn.Open();
+            }
+            return conn;
+        }
+        private static void hrsOutConn()
+        {
+
+            using (SqlConnection conn = hrsconnection())
+            {
+                if (conn.State == ConnectionState.Open)
+                {
+                    conn.Close();
+                }
+            }
+
+        }
+
+        public static DataTable hrsExecuteQuery(string cmdText)
+        {
+            SqlCommand cmd = new SqlCommand();
+
+            DataTable dt = new DataTable();
+            cmd = new SqlCommand(cmdText, hrsGetConn());
+            using (SqlDataReader sdr = cmd.ExecuteReader(CommandBehavior.CloseConnection))
+            {
+                try
+                {
+                    dt.Load(sdr);
+                }
+                catch (Exception ex)
+                {
+
+                }
+                finally
+                {
+                    sdr.Close();
+                    cmd.Dispose();
+                    hrsOutConn();
+                }
+            }
+
+            return dt;
+        }
+        public static SqlConnection TBIHRSconnection()
+        {
+            SqlConnection con = new SqlConnection(ConfigurationManager.ConnectionStrings["tbiHRSConnectionString"].ConnectionString);
+            return con;
+        }
+
+        private static SqlConnection TBIHRSGetConn()
+        {
+            SqlConnection conn = TBIHRSconnection();
+
+            if (conn.State == ConnectionState.Closed)
+            {
+                conn.Open();
+            }
+            return conn;
+        }
+        private static void TBIHRSOutConn()
+        {
+
+            using (SqlConnection conn = TBIHRSconnection())
+            {
+                if (conn.State == ConnectionState.Open)
+                {
+                    conn.Close();
+                }
+            }
+
+        }
+
+        public static DataTable TBIHRSExecuteQuery(string cmdText)
+        {
+            SqlCommand cmd = new SqlCommand();
+
+            DataTable dt = new DataTable();
+            cmd = new SqlCommand(cmdText, TBIHRSGetConn());
+            using (SqlDataReader sdr = cmd.ExecuteReader(CommandBehavior.CloseConnection))
+            {
+                try
+                {
+                    dt.Load(sdr);
+                }
+                catch (Exception ex)
+                {
+
+                }
+                finally
+                {
+                    sdr.Close();
+                    cmd.Dispose();
+                    TBIHRSOutConn();
+                }
+            }
+
+            return dt;
+        }
+
+
+    }
+}

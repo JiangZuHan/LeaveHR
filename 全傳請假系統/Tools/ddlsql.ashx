@@ -1,0 +1,414 @@
+﻿<%@ WebHandler Language="C#" Class="ddlsql" %>
+
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Linq;
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+/*要引用以下命名空間*/
+using System.Data;
+using System.Data.SqlClient;
+/*Json.NET相關的命名空間*/
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using HR.DBUtility;
+
+public class ddlsql : IHttpHandler, System.Web.SessionState.IRequiresSessionState
+{
+
+    static DateTime now = DateTime.Now;
+    static String aa = now.ToString("yyyyMMdd");
+    //連接資料庫
+    string tbi = ConfigurationManager.ConnectionStrings["tbiConnectionString"].ConnectionString;
+    string tbiHRS = ConfigurationManager.ConnectionStrings["tbiHRSConnectionString"].ConnectionString;
+    string hrs = ConfigurationManager.ConnectionStrings["hrsConnectionString"].ConnectionString;
+
+    //ddl1的
+    string sql1 = @"SELECT DISTINCT hrs, (STN_WORK +' / '+ CONTEN)as dpt FROM tbi.dbo.XSingOrd X, tbi.dbo.Winton_mf2000 W  where mf200 = STN_WORK and online = '1' order by dpt";
+    //ddl2的
+    string sql2 = @"SELECT Username,([Username]+' / '+[CNname])as Users,[a1] FROM [tbi].[dbo].[Users] where dat_lime > '" + aa + "' and a1 != '' order by a1  ";
+    //table1的
+    //string sql3 = @"select DISTINCT U.Username,U.CNname, mf200, (mf200+' / '+CONTEN)as dpt,U.q2 , U.a2 from tbi.dbo.XSingOrd X, tbi.dbo.Users U, tbi.dbo.Winton_mf2000 W where a1 = hrs and STN_WORK = mf200 and DAT_LIME > '" + aa + "' order by mf200";
+    //string sql3 = @"select DISTINCT U.Username,U.CNname, mf200, (mf200+' / '+CONTEN)as dpt,U.q2 , U.a2 from tbi.dbo.Users U, tbi.dbo.Winton_mf2000 W where a1 = hrs and DAT_LIME > '" + aa + "' order by mf200 desc"; //and online = '1' 
+    string sql3 = @"select  U.Username,U.CNname, mf200, (mf200+' / '+hrs+' / '+CONTEN) as dpt,U.q2 , U.a2 from tbi.dbo.Users U, tbi.dbo.Winton_mf2000 W where U.zfbNO = W.id and DAT_LIME > '"+ aa +"' order by mf200 desc";
+    //table2的
+    string sql4 = @"SELECT X.ID,X.ProgramName,X.STN_WORK, (X.STN_WORK+' / '+ W.CONTEN)as dpt, X.deptctl, X.ProgNo, X.LUSERID, X.SUSERID, X.DUSERID, X.MUSERID, X.GUSERID,X.AddTime FROM tbi.dbo.XSingOrd X, tbi.dbo.Winton_mf2000 W where mf200 = STN_WORK AND [PROGRAMNAME]='WPA60'";
+    public void ProcessRequest(HttpContext context)
+    {
+
+        if (context.Request["ddl2"] != null && context.Request["ddl3"] != null)
+        {
+            updateuser1(context);
+        }
+        else if (context.Request["check"] != null && context.Request["ddl4"] != null)
+        {
+            updateuser2(context);
+        }
+        if (context.Request["mode"] != null)
+        {
+            string mode = context.Request["mode"].ToString();
+
+            switch (mode)
+            {
+
+                case "DDL1":
+                    DDL1(context);
+                    break;
+
+                case "DDL2":
+                    DDL2(context);
+                    break;
+                case "DDL4":
+                    DDL4(context);
+                    break;
+                case "SelectDpt":
+                    SelectDpt(context);
+                    break;
+                case "table1":
+                    table1(context);
+                    break;
+                case "table2":
+                    table2(context);
+                    break;
+                case "Insert":
+                    Insert(context);
+                    break;
+                case "Update":
+                    Update(context);
+                    break;
+                case "Delete":
+                    Delete(context);
+                    break;
+                case "users":
+                    users(context);
+                    break;
+
+
+
+            }
+        }
+    }
+
+    /******************************************** 建立DataTable，供轉換JSON格式使用 ***********************************************/
+    private DataTable queryDataTable1(string sql1)
+    {
+
+        DataSet ds = new DataSet();//DataSet?
+        using (SqlConnection conn = new SqlConnection(this.tbi))
+        {
+            SqlDataAdapter da = new SqlDataAdapter(sql1, conn);//SqlDataAdapter?
+            da.Fill(ds);//Fill?
+        }
+
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();//if 精簡打法，研究!
+
+    }
+
+    private DataTable queryDataTable2(string sql2)
+    {
+
+        DataSet ds = new DataSet();
+        using (SqlConnection conn = new SqlConnection(this.tbi))
+        {
+            SqlDataAdapter da = new SqlDataAdapter(sql2, conn);
+            da.Fill(ds);
+        }
+
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable(); //
+
+    }
+    private DataTable queryDataTable3(string sql3)
+    {
+        DataSet ds = new DataSet();
+        using (SqlConnection conn = new SqlConnection(this.tbi))
+        {
+            SqlDataAdapter da = new SqlDataAdapter(sql3, conn);
+            da.Fill(ds);
+        }
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+    private DataTable queryDataTable4(string sql4)
+    {
+        DataSet ds = new DataSet();
+        using (SqlConnection conn = new SqlConnection(this.tbi))
+        {
+            SqlDataAdapter da = new SqlDataAdapter(sql4, conn);
+            da.Fill(ds);
+        }
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+    private DataTable queryDataTable5()
+    {
+        DataSet ds = new DataSet();
+        string sql5;
+        sql5 = "SELECT DISTINCT ProgNo FROM tbi.dbo.XSingOrd";
+        using (SqlConnection conn = new SqlConnection(this.tbi))
+        {
+            SqlDataAdapter da = new SqlDataAdapter(sql5, conn);
+            da.Fill(ds);
+        }
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+    private DataTable queryDataTable6()
+    {
+        DataSet ds = new DataSet();
+        string sql6;
+        sql6 = "SELECT DISTINCT mf200, (mf200 +' / '+ CONTEN)as dpt FROM tbi.dbo.Winton_mf2000 order by dpt";
+        using (SqlConnection conn = new SqlConnection(this.tbi))
+        {
+            SqlDataAdapter da = new SqlDataAdapter(sql6, conn);
+            da.Fill(ds);
+        }
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+
+    /******************************************** 轉為JSON格式，並回傳前端 ***********************************************/
+
+    public void Insert(HttpContext context)
+    {
+        string STN_WORK = context.Request["InsertDpt"].ToString();
+        string ProgNo = context.Request["ProgNo"].ToString();
+        string LUSERID = context.Request["LuserId"].ToString();
+        string SUSERID = context.Request["SuserId"].ToString();
+        string DUSERID = context.Request["DuserId"].ToString();
+        string MUSERID = context.Request["MuserId"].ToString();
+        string PoUser = context.Request["InsertUser"].ToString();
+
+        SqlConnection conn = new SqlConnection(tbi);
+        conn.Open();
+        SqlCommand TbiInsert = new SqlCommand();
+
+        TbiInsert.CommandText = " INSERT INTO tbi.dbo.XSingOrd(ProgramName, STN_WORK, ProgNo,deptctl, LPAAK200, LUSERID, SPAAK200, SUSERID";
+        TbiInsert.CommandText += ", DPAAK200, DUSERID , MPAAK200, MUSERID, GPAAK200, GUSERID, PoUser, AddTime)VALUES(";
+        TbiInsert.CommandText += "'WPA60', '" + STN_WORK + "','" + ProgNo + "','TBI1',' ','" + LUSERID + "',' ','" + SUSERID + "'";
+        TbiInsert.CommandText += ",' ','" + DUSERID + "',' ','" + MUSERID + "',' ','A02','" + PoUser + "'";
+        TbiInsert.CommandText += ",'" + DateTime.Parse(now.ToString()).ToString("yyyy-MM-dd HH:mm:ss.fff") + "')";
+
+        TbiInsert.Connection = conn;
+        TbiInsert.ExecuteNonQuery();
+        conn.Dispose();
+        conn.Close();
+    }
+    public void Update(HttpContext context)
+    {
+        string ID = context.Request["ID"].ToString();
+        string STN_WORK = context.Request["UpdateDpt"].ToString();
+        string ProgNo = context.Request["ProgNo2"].ToString();
+        string LUSERID = context.Request["LuserId2"].ToString();
+        string SUSERID = context.Request["SuserId2"].ToString();
+        string DUSERID = context.Request["DuserId2"].ToString();
+        string MUSERID = context.Request["MuserId2"].ToString();
+        string PoUser = context.Request["UpdateUser"].ToString();
+        SqlConnection conn = new SqlConnection(tbi);
+        conn.Open();
+        SqlCommand sqlcom = new SqlCommand();
+        sqlcom.CommandText = "update [tbi].[dbo].[XSingOrd] set STN_WORK ='" + STN_WORK + "',ProgNo='" + ProgNo + "',LUSERID='" + LUSERID + "'";
+        sqlcom.CommandText += ",SUSERID='" + SUSERID + "',DUSERID='" + DUSERID + "',MUSERID='" + MUSERID + "',PoUser='" + PoUser + "'";
+        sqlcom.CommandText += ",AddTime='" + DateTime.Parse(now.ToString()).ToString("yyyy-MM-dd HH:mm:ss.fff") + "' where ID = '" + ID + "'";
+        sqlcom.Connection = conn;
+        sqlcom.ExecuteNonQuery();
+    }
+    public void Delete(HttpContext context)
+    {
+        string ID = context.Request["ID"].ToString();
+        SqlConnection conn = new SqlConnection(tbi);
+        conn.Open();
+        SqlCommand sqlcom = new SqlCommand();
+        sqlcom.CommandText = "Delete tbi.dbo.XSingOrd where ID='" + ID + "'";
+        sqlcom.Connection = conn;
+        sqlcom.ExecuteNonQuery();
+    }
+    public void DDL1(HttpContext context)
+    {
+        //得到一個DataTable物件
+        DataTable dt = this.queryDataTable1(this.sql1);
+        //將DataTable轉成JSON字串
+        string str_json1 = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(str_json1);
+    }
+
+    public void DDL2(HttpContext context)
+    {
+
+        //得到一個DataTable物件
+        DataTable dt = this.queryDataTable2(this.sql2);
+        //將DataTable轉成JSON字串
+        string str_json2 = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(str_json2);
+    }
+    public void DDL4(HttpContext context)
+    {
+
+        //得到一個DataTable物件
+        DataTable dt = this.queryDataTable5();
+        //將DataTable轉成JSON字串
+        string str_json2 = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(str_json2);
+    }
+    public void users(HttpContext context)
+    {
+        if(context.Session["username"].ToString() == "03427" || context.Session["username"].ToString() == "03009")
+        {
+
+            string sql = "select username, UserPwd, cnname, q1, a1 from [tbi].[dbo].[Users] ";
+            DataTable dt = new DataTable();
+            dt = BOSSQL.ExecuteQuery(sql);
+
+            string str_json4 = JsonConvert.SerializeObject(dt, Formatting.Indented);
+            context.Response.Write(str_json4);
+        }
+    }
+    private DataTable querydatatable(string value)
+    {
+        string sql;
+        sql = "select CNname from tbi.dbo.Users where username = '" + value + "'";
+        DataSet ds = new DataSet();
+        using (SqlConnection conn = new SqlConnection(tbi))
+        {
+            SqlDataAdapter da = new SqlDataAdapter(sql, conn);
+            da.Fill(ds);
+        }
+
+        //LUS.Open();
+        //SqlCommand tbi1 = new SqlCommand(sql,LUS);
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+
+    }
+    public void table1(HttpContext context)
+    {
+        //得到一個DataTable物件
+        DataTable dt = this.queryDataTable3(this.sql3);
+        //將DataTable轉成JSON字串
+        string str_json3 = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(str_json3);
+    }
+
+    public void table2(HttpContext context)
+    {
+        DataTable dt = this.queryDataTable4(this.sql4);
+        dt.Columns.Add("Monitor");//班長
+        dt.Columns.Add("Chief");//課長
+        dt.Columns.Add("DeputyManager");//副理
+        dt.Columns.Add("Manager");//經理
+        dt.Columns.Add("GeneralManager");//總經理
+        string LUSER;
+        string SUSER;
+        string DUSER;
+        string MUSER;
+        string GUSER;
+        for (int i = 0; i < dt.Rows.Count; i++)
+        {
+            LUSER = dt.Rows[i]["LUSERID"].ToString();//班長
+            DataTable d1 = querydatatable(LUSER);
+            if (d1.Rows.Count > 0)
+            {
+                dt.Rows[i]["Monitor"] = dt.Rows[i]["LUSERID"].ToString() + " / " + d1.Rows[0][0].ToString();
+            }
+            else
+            {
+                dt.Rows[i]["Monitor"] = "";
+            }
+
+            SUSER = dt.Rows[i]["SUSERID"].ToString();//課長
+            DataTable d2 = querydatatable(SUSER);
+            if (d2.Rows.Count > 0)
+            {
+                dt.Rows[i]["Chief"] = dt.Rows[i]["SUSERID"].ToString() + " / " + d2.Rows[0][0].ToString();
+            }
+            else
+            {
+                dt.Rows[i]["Chief"] = "";
+            }
+
+            DUSER = dt.Rows[i]["DUSERID"].ToString();//副理
+            DataTable d3 = querydatatable(DUSER);
+            if (d3.Rows.Count > 0)
+            {
+                dt.Rows[i]["DeputyManager"] = dt.Rows[i]["DUSERID"].ToString() + " / " + d3.Rows[0][0].ToString();
+            }
+            else
+            {
+                dt.Rows[i]["DeputyManager"] = "";
+            }
+
+            MUSER = dt.Rows[i]["MUSERID"].ToString();//經理
+            DataTable d4 = querydatatable(MUSER);
+            if (d4.Rows.Count > 0)
+            {
+                dt.Rows[i]["Manager"] = dt.Rows[i]["MUSERID"].ToString() + " / " + d4.Rows[0][0].ToString();
+            }
+            else
+            {
+                dt.Rows[i]["Manager"] = "";
+            }
+
+            GUSER = dt.Rows[i]["GUSERID"].ToString();//總經理
+            DataTable d5 = querydatatable(GUSER);
+            if (d5.Rows.Count > 0)
+            {
+                dt.Rows[i]["GeneralManager"] = dt.Rows[i]["GUSERID"].ToString() + " / " + d5.Rows[0][0].ToString();
+            }
+            else
+            {
+                dt.Rows[i]["GeneralManager"] = "";
+            }
+        }
+
+        string str_json4 = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(str_json4);
+    }
+
+    public void updateuser1(HttpContext context)
+    {
+        string ddl2 = context.Request["ddl2"].ToString();
+        string ddl3 = context.Request["ddl3"].ToString();
+        SqlConnection Conn = new SqlConnection(tbi);//建立名為conn的連結物件
+        Conn.Open();//開啟資料庫
+        SqlCommand cmd = new SqlCommand();
+        cmd.CommandText = "update [tbi].[dbo].[Users] set [a2] = @a2 where [Username] = @Username ";
+        cmd.Parameters.Add("@a2", SqlDbType.VarChar).Value = ddl3;
+        cmd.Parameters.Add("@Username", SqlDbType.VarChar).Value = ddl2;
+        cmd.Connection = Conn;
+        cmd.ExecuteNonQuery();
+        cmd.Cancel();
+        Conn.Close();
+        context.Response.Write("<script>location.href='people.aspx';</script>");
+
+    }
+    public void updateuser2(HttpContext context)
+    {
+        string check = context.Request["check"].ToString();
+        string ddl4 = context.Request["ddl4"].ToString();
+        SqlConnection Conn = new SqlConnection(tbi);//建立名為conn的連結物件
+        Conn.Open();//開啟資料庫
+        SqlCommand cmd = new SqlCommand();
+        cmd.CommandText = "update [tbi].[dbo].[Users] set [a2] = @a2 where [Username] = @Username ";
+        cmd.Parameters.Add("@a2", SqlDbType.VarChar).Value = ddl4;
+        cmd.Parameters.Add("@Username", SqlDbType.VarChar).Value = check;
+        cmd.Connection = Conn;
+        cmd.ExecuteNonQuery();
+        cmd.Cancel();
+        Conn.Close();
+        context.Response.Write("<script>location.href='people.aspx';</script>");
+
+    }
+    public void SelectDpt(HttpContext context)
+    {
+        //得到一個DataTable物件
+        DataTable dt = this.queryDataTable6();
+        //將DataTable轉成JSON字串
+        string str_json1 = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(str_json1);
+    }
+
+    public bool IsReusable
+    {
+        get
+        {
+            return false;
+        }
+    }
+
+}

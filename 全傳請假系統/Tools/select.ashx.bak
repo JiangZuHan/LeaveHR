@@ -1,0 +1,929 @@
+﻿<%@ WebHandler Language="C#" Class="_select" %>
+
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Web;
+using System.Web.SessionState;
+using HRS.Common;
+
+public class _select : IHttpHandler, IRequiresSessionState
+{
+    string tbi = ConfigurationManager.ConnectionStrings["tbiConnectionString"].ConnectionString;
+    string tbiHRS = ConfigurationManager.ConnectionStrings["tbiHRSConnectionString"].ConnectionString;
+    string hrs = ConfigurationManager.ConnectionStrings["hrsConnectionString"].ConnectionString;
+    string SQL1 = "SELECT CONTEN FROM tbi.dbo.Winton_mf2000";
+    string SQL2 = "SELECT Username, CNname FROM tbi.dbo.Users INNER JOIN tbi.dbo.Winton_mf2000 ON hrs = a1 WHERE DAT_LIME > CONVERT(varchar(12), GETDATE(), 112)";
+    string SQL3, SQL4;
+    public static string CONTEN, PAAK200, PA60002, username;
+
+    public static void Hiu(HttpContext context)
+    {
+        CONTEN = context.Session["CONTEN"].ToString().Trim();
+        PAAK200 = context.Session["PAAK200"].ToString().Trim();
+        PA60002 = context.Session["UserName"].ToString().Trim();
+        if (context.Session["username"].ToString().StartsWith("0") == true && context.Session["username"].ToString().Length == 5)
+        {
+            _select.username = context.Session["username"].ToString().Substring(1);
+        }
+        else
+        {
+            _select.username = context.Session["username"].ToString();
+        }
+    }
+
+    public void ProcessRequest(HttpContext context)
+    {
+        if (context.Request["mode"] != null)
+        {
+            string mode = context.Request["mode"].ToString();
+            switch (mode)
+            {
+                case "Login":
+                    Login(context);
+                    break;
+                case "Dept":
+                    Dept(context);
+                    break;
+                case "User":
+                    User(context);
+                    break;
+                case "User2":
+                    User2(context);
+                    break;
+                case "Search":
+                    Search(context);
+                    break;
+                case "Approval":
+                    Approval(context);
+                    break;
+            }
+        }
+    }
+
+    public bool IsReusable
+    {
+        get
+        {
+            return false;
+        }
+    }
+
+    public void Login(HttpContext context)
+    {
+        string account = context.Request["account"].ToString().Trim();
+        string account2 = "";
+        if (account != "")
+        {
+            account2 = account.Substring(1);
+        }
+        string password = context.Request["password"].ToString().Trim();
+        //建立連接
+        SqlConnection myConn = new SqlConnection(tbi);
+        String strSQL = @"SELECT U.id, U.Username, U.UserPwd, U.CNname, U.q1, U.a1, U.DAT_LIME, W.PAAK200, mf.CONTEN, U.zfbNO FROM tbi.dbo.WPAAK W INNER JOIN tbi.dbo.Users U ON W.PAAK002 = U.q1 LEFT JOIN tbi.dbo.Winton_mf2000 mf ON U.a1 = mf.hrs AND mf.online = '1' WHERE U.Username = @paramName ORDER BY U.Username";
+        //建立SQL命令對象
+        SqlCommand myCommand = new SqlCommand(strSQL, myConn);
+        myCommand.Parameters.Add("@paramName", SqlDbType.VarChar).Value = account;
+        //打開連接
+        myConn.Open();
+        //得到Data結果集
+        SqlDataReader myDataReader = myCommand.ExecuteReader();
+        try
+        {
+            if (myDataReader.HasRows)
+            {
+                while (myDataReader.Read())
+                {
+                    if (account == myDataReader["Username"].ToString().Trim() && (DESEncrypt.Encrypt(password, Param.EncCode) == myDataReader["UserPwd"].ToString().Trim() || password == myDataReader["UserPwd"].ToString().Trim()))
+                    {
+                        string Date1 = myDataReader["DAT_LIME"].ToString().Trim();
+                        string Date2 = DateTime.Now.ToString("yyyyMMdd");
+                        if (string.Compare(Date1, Date2) > 0)
+                        {
+                            context.Session["UserName"] = myDataReader["Username"].ToString().Trim();
+                            context.Session["PAAK200"] = myDataReader["PAAK200"].ToString().Trim();
+                            context.Session["CONTEN"] = myDataReader["CONTEN"].ToString().Trim();
+                            context.Session["a1"] = myDataReader["a1"].ToString().Trim();
+                            context.Session["zfbNO"] = myDataReader["zfbNO"].ToString().Trim();
+                            DateTime time = DateTime.Now;
+                            context.Session["time"] = time.ToString("yyyy/MM/dd dddd hh:mm:ss");
+                            int paak200 = Convert.ToInt32(myDataReader["PAAK200"].ToString());
+                            context.Response.Write(paak200);
+                            myDataReader.Close();
+                            //string strSQL2 = "SELECT U.id, U.Username, U.UserPwd, U.CNname, U.q1, U.DAT_LIME, PA.PADF005, PA.PADF011 FROM tbi.dbo.Users U, OPENDATASOURCE('SQLOLEDB', '" + hrs + "').hrs_mis.dbo.WPADF PA WHERE U.Username = '0' + PA.PADF002 AND U.Username = '" + account + "' GROUP BY U.id, U.Username, U.UserPwd, U.CNname, U.q1, U.DAT_LIME, PA.PADF005, PA.PADF011";
+                            SqlConnection Conn = new SqlConnection(hrs);
+                            string strSQL2 = "SELECT PADF002, PADF005, PADF006 FROM hrs_mis.dbo.WPADF WHERE PADF002 = '" + account2 + "' AND PADF006 >= '" + DateTime.Now.ToString("yyyy-MM-dd") + "'";
+                            SqlCommand cmd2 = new SqlCommand(strSQL2, Conn);
+                            Conn.Open();
+                            SqlDataReader myDataReader2 = cmd2.ExecuteReader();
+                            try
+                            {
+                                if (myDataReader2.HasRows)
+                                {
+                                    while (myDataReader2.Read())
+                                    {
+                                        if (account2 == myDataReader2["PADF002"].ToString().Trim())
+                                        {
+                                            context.Response.Write(" 留職停薪");
+                                            context.Session["PADF"] = "留職停薪";
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                cmd2.Dispose();
+                                myDataReader2.Close();
+                                Conn.Dispose();
+                                Conn.Close();
+                            }
+                            finally
+                            {
+                                cmd2.Dispose();
+                                myDataReader2.Close();
+                                Conn.Dispose();
+                                Conn.Close();
+                            }
+                        }
+                        else
+                        {
+                            context.Response.Write(string.Compare(Date1, Date2));
+                        }
+                    }
+                    else
+                    {
+                        context.Response.Write(false);
+                    }
+                }
+            }
+            myCommand.Dispose();
+        }
+        catch (Exception ex)
+        {
+            myConn.Dispose();
+            myConn.Close();
+        }
+        finally
+        {
+            myConn.Dispose();
+            myConn.Close();
+        }
+    }
+
+    private DataTable DataTable1(string SQL1, HttpContext context)
+    {
+        Hiu(context);
+        if (CONTEN != "人力資源部" && PAAK200 != "1" && PAAK200 != "20")
+        {
+            SQL1 += " WHERE CONTEN = '" + CONTEN + "' AND online = '1'";
+        }
+        else
+        {
+            SQL1 += " WHERE online = '1'";
+        }
+        DataSet ds = new DataSet();
+        SqlConnection conn = new SqlConnection(tbi);
+        SqlDataAdapter da = new SqlDataAdapter(SQL1, conn);
+        da.Fill(ds);
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+
+    private DataTable DataTable2(string SQL2, HttpContext context)
+    {
+        Hiu(context);
+        if (CONTEN != "人力資源部" && PAAK200 != "1" && PAAK200 != "20")
+        {
+            SQL2 += " AND Username != '" + PA60002 + "' AND CONTEN = '" + CONTEN + "' GROUP BY Username, CNname";
+        }
+        else
+        {
+            SQL2 += " AND Username != '" + PA60002 + "' GROUP BY Username, CNname";
+        }
+        DataSet ds = new DataSet();
+        SqlConnection conn = new SqlConnection(tbi);
+        SqlDataAdapter da = new SqlDataAdapter(SQL2, conn);
+        da.Fill(ds);
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+
+    private DataTable DataTable3(string SQL2, HttpContext context)
+    {
+        Hiu(context);
+        if (CONTEN == "人力資源部" || PAAK200 == "1" || PAAK200 == "20")
+        {
+            string dept = context.Request["dept"].ToString().Trim();
+            if (dept != "")
+            {
+                SQL2 += " AND Username != '" + PA60002 + "' AND CONTEN IN (" + dept + ") GROUP BY Username, CNname";
+            }
+            else
+            {
+                SQL2 += " AND Username != '" + PA60002 + "' GROUP BY Username, CNname";
+            }
+        }
+        else
+        {
+            SQL2 += " AND Username != '" + PA60002 + "' AND CONTEN = '" + CONTEN + "' GROUP BY Username, CNname";
+        }
+        DataSet ds = new DataSet();
+        SqlConnection conn = new SqlConnection(tbi);
+        SqlDataAdapter da = new SqlDataAdapter(SQL2, conn);
+        da.Fill(ds);
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+
+    private DataTable DataTable4(string SQL3, HttpContext context)
+    {
+        string dept = context.Request["dept"].ToString().Trim();
+        string approval = context.Request["approval"].ToString().Trim();
+        string user = context.Request["user"].ToString().Trim();
+        string leavedate = context.Request["leavedate"].ToString().Trim();
+        string toleavedate = context.Request["toleavedate"].ToString().Trim();
+        string leave = context.Request["leave"].ToString().Trim();
+        if (PA60002.StartsWith("0") == true && PA60002.Length == 5)
+        {
+            PA60002 = PA60002.Substring(1);
+        }
+        if (user.StartsWith("0") == true)
+        {
+            user = user.Substring(1);
+        }
+        if (dept != "")//1.有選取部門
+        {
+            if (user != "")//2.選取部門下查詢指定工號
+            {
+                if (leavedate != "" && toleavedate != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60042, PA60003, PA60038, PA60040, PA60039 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60042, PA60003, PA60038, PA60040, PA60039 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60042, PA60003, PA60038, PA60040, PA60039 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (toleavedate != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate == "" && toleavedate == "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+            }
+            else//2.選取部門下不選取工號
+            {
+                if (leavedate != "" && toleavedate != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (toleavedate != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate == "" && toleavedate == "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                    if (leave != "")//4.
+                    {
+                        SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN IN (" + dept + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                    }
+                }
+            }
+        }
+        else if (user != "")//1.不選取部門下查詢指定工號
+        {
+            if (leavedate != "" && toleavedate != "")//2.
+            {
+                SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+            else if (leavedate != "")//2.
+            {
+                SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+            else if (toleavedate != "")//2.
+            {
+                SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+            else if (leavedate == "" && toleavedate == "")//2.
+            {
+                SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT CONTEN, PA60002, CNname, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+        }
+        else if (user == "")//1.查詢自己紀錄
+        {
+            if (leavedate != "" && toleavedate != "")//2.
+            {
+                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+            else if (leavedate != "")//2.
+            {
+                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+            else if (toleavedate != "")//2.
+            {
+                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+            else if (leavedate == "" && toleavedate == "")//2.
+            {
+                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL";
+                if (leave != "")//3.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003, PA60038, PA60040, PA60039, PA60042, CONTEN, CNname FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND PA60002 = '" + PA60002 + "' AND ('" + approval + "' = '-1' OR PA60039 = '" + approval + "') AND PA60043 IS NULL AND PA60004 IN (" + leave + ")";
+                }
+            }
+        }
+        DataSet ds = new DataSet();
+        SqlConnection conn = new SqlConnection(tbi);
+        SqlDataAdapter da = new SqlDataAdapter(SQL3, conn);
+        da.Fill(ds);
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+
+    private DataTable DataTable5(HttpContext context)
+    {
+        Hiu(context);
+        string week = context.Request["week2"].ToString().Trim();
+        string week2 = DateTime.Parse(week).ToString("yyyy-MM-dd");
+        if (PA60002 == "A02")
+        {
+            SQL4 = "SELECT CONTEN, PA60002, CNname, PA60004, PA60007, PA60008, PA60011, PA60016, PA60038, PA60040, PA60998, PA60996, PA60003 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' JOIN tbi.dbo.WPAAK ON PAAK002 = q1 WHERE Username LIKE '%' + PA60002 AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) <= '" + week2 + "' AND SUBSTRING(CONVERT(varchar, PA60008, 120), 1, 10) >= '" + week2 + "' AND PA60039 = '0' AND PA60043 IS NULL AND (PAAK200 BETWEEN '10' AND '38' OR PA60011 >= '1440') ORDER BY PA60007";
+        }
+        else
+        {
+            SQL4 = "SELECT CONTEN, PA60002, CNname, PA60004, PA60007, PA60008, PA60011, PA60016, PA60038, PA60040, PA60998, PA60996, PA60003 FROM TBI_HRS.dbo.PA123, tbi.dbo.Winton_mf2000 JOIN tbi.dbo.Users ON a1 = hrs AND online = '1' WHERE Username LIKE '%' + PA60002 AND CONTEN = '" + CONTEN + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) <= '" + week2 + "' AND SUBSTRING(CONVERT(varchar, PA60008, 120), 1, 10) >= '" + week2 + "' AND PA60039 = '0' AND PA60043 IS NULL ORDER BY PA60007";
+        }
+        DataSet ds = new DataSet();
+        SqlConnection conn = new SqlConnection(tbi);
+        SqlDataAdapter da = new SqlDataAdapter(SQL4, conn);
+        da.Fill(ds);
+        return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+    }
+
+    public void Dept(HttpContext context)
+    {
+        DataTable dt = this.DataTable1(SQL1, context);
+        string ReturnString = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(ReturnString);
+    }
+
+    public void User(HttpContext context)
+    {
+        DataTable dt = this.DataTable2(SQL2, context);
+        string ReturnString = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(ReturnString);
+    }
+
+    public void User2(HttpContext context)
+    {
+        DataTable dt = this.DataTable3(SQL2, context);
+        string ReturnString = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(ReturnString);
+    }
+
+    private DataTable PA60(HttpContext context)
+    {
+        string dept = context.Request["dept"].ToString().Trim();
+        string approval = context.Request["approval"].ToString().Trim();
+        string user = context.Request["user"].ToString().Trim();
+        string leavedate = context.Request["leavedate"].ToString().Trim();
+        string toleavedate = context.Request["toleavedate"].ToString().Trim();
+        string leave = context.Request["leave"].ToString().Trim();
+        if (PA60002.StartsWith("0") == true && PA60002.Length == 5)
+        {
+            PA60002 = PA60002.Substring(1);
+        }
+        if (user.StartsWith("0") == true)
+        {
+            user = user.Substring(1);
+        }
+        if (approval == "-1" || approval == "0")
+        {
+            if (dept != "")//1.有選取部門
+            {
+                if (user != "")//2.選取部門下查詢指定工號
+                {
+                    if (leavedate != "" && toleavedate != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "'";
+                        if (leave != "")//4.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                        }
+                    }
+                    else if (leavedate != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231'";
+                        if (leave != "")//4.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND PA60004 IN (" + leave + ")";
+                        }
+                    }
+                    else if (toleavedate != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "'";
+                        if (leave != "")//4.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE AND PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                        }
+                    }
+                    else if (leavedate == "" && toleavedate == "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1";
+                        if (leave != "")//4.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND PA60004 IN (" + leave + ")";
+                        }
+                    }
+                }
+                else//2.選取部門下不選取工號
+                {
+                    string sql = "SELECT Username, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE CONTEN IN (" + dept + ")";
+                    SqlConnection corr = new SqlConnection(tbi);//建立名為conn的連結物件
+                    corr.Open();
+                    SqlCommand tdiii = new SqlCommand(sql, corr);
+                    DataTable doublecheck = new DataTable();
+                    doublecheck.Load(tdiii.ExecuteReader());
+                    tdiii.Cancel();
+                    corr.Dispose();
+                    corr.Close();
+                    string num = null;
+                    for (int i = 0; i < doublecheck.Rows.Count; i++)
+                    {
+                        if (doublecheck.Rows[i]["Username"].ToString().StartsWith("0") == true && doublecheck.Rows[i]["Username"].ToString().Length == 5)
+                        {
+                            if (i == doublecheck.Rows.Count - 1)
+                            {
+                                num += "'" + doublecheck.Rows[i]["Username"].ToString().Substring(1) + "'";
+                            }
+                            else
+                            {
+                                num += "'" + doublecheck.Rows[i]["Username"].ToString().Substring(1) + "', ";
+                            }
+                        }
+                        else
+                        {
+                            if (i == doublecheck.Rows.Count - 1)
+                            {
+                                num += "'" + doublecheck.Rows[i]["Username"].ToString() + "'";
+                            }
+                            else
+                            {
+                                num += "'" + doublecheck.Rows[i]["Username"].ToString() + "', ";
+                            }
+                        }
+                        if (leavedate != "" && toleavedate != "")//3.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "'";
+                            if (leave != "")//4.
+                            {
+                                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                            }
+                        }
+                        else if (leavedate != "")//3.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231'";
+                            if (leave != "")//4.
+                            {
+                                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND PA60004 IN (" + leave + ")";
+                            }
+                        }
+                        else if (toleavedate != "")//3.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "'";
+                            if (leave != "")//4.
+                            {
+                                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                            }
+                        }
+                        else if (leavedate == "" && toleavedate == "")//3.
+                        {
+                            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1";
+                            if (leave != "")//4.
+                            {
+                                SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 IN (" + num + ") AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND PA60004 IN (" + leave + ")";
+                            }
+                        }
+                    }
+                }
+            }
+            else if (user != "")//1.不選取部門下查詢指定工號
+            {
+                if (leavedate != "" && toleavedate != "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "'";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate != "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231'";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (toleavedate != "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "'";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate == "" && toleavedate == "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + user + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0) AND DATEADD(mm, 1, DATEADD(dd, 0, DATEADD(mm, DATEDIFF(mm, 0, GETDATE()), 0))) - 1 AND PA60004 IN (" + leave + ")";
+                    }
+                }
+            }
+            else if (user == "")//1.查詢自己紀錄
+            {
+                if (leavedate != "" && toleavedate != "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "'";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate != "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231'";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '" + leavedate + "' AND '29991231' AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (toleavedate != "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "'";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "' AND SUBSTRING(CONVERT(varchar, PA60007, 120), 1, 10) BETWEEN '19700101' AND '" + toleavedate + "' AND PA60004 IN (" + leave + ")";
+                    }
+                }
+                else if (leavedate == "" && toleavedate == "")//2.
+                {
+                    SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "'";
+                    if (leave != "")//3.
+                    {
+                        SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE PA60002 = '" + PA60002 + "' AND PA60004 IN (" + leave + ")";
+                    }
+                }
+            }
+            DataSet ds = new DataSet();
+            SqlConnection conn = new SqlConnection(hrs);
+            SqlDataAdapter da = new SqlDataAdapter(SQL3, conn);
+            da.Fill(ds);
+            return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+        }
+        else
+        {
+            SQL3 = "SELECT PA60002, PA60004, ISNULL(PA60007, '') PA60007, ISNULL(PA60008, '') PA60008, PA60011, PA60016, PA60998, PA60996, PA60003 FROM hrs_mis.dbo.WPA60 WHERE '1' != '1'";
+            DataSet ds = new DataSet();
+            SqlConnection conn = new SqlConnection(hrs);
+            SqlDataAdapter da = new SqlDataAdapter(SQL3, conn);
+            da.Fill(ds);
+            return ds.Tables.Count > 0 ? ds.Tables[0] : new DataTable();
+        }
+    }
+
+    public void Search(HttpContext context)
+    {
+        DataTable dt = this.DataTable4(SQL3, context);
+        dt.Columns.Add("start");
+        dt.Columns.Add("end");
+        dt.Columns.Add("time");
+        dt.Columns.Add("app");
+        dt.Columns.Add("audit");
+        dt.Columns.Add("PA604");
+        DataTable pa60 = this.PA60(context);
+        pa60.Columns.Add("start");
+        pa60.Columns.Add("end");
+        pa60.Columns.Add("time");
+        pa60.Columns.Add("app");
+        pa60.Columns.Add("audit");
+        pa60.Columns.Add("PA604");
+        pa60.Columns.Add("CONTEN");
+        pa60.Columns.Add("CNname");
+        pa60.Columns.Add("PA60038");
+        pa60.Columns.Add("PA60040");
+        pa60.Columns.Add("PA60042");
+        string dept = context.Request["dept"].ToString().Trim();
+        string pa604;
+        for (int i = 0; i < pa60.Rows.Count; i++)
+        {
+            pa604 = pa60.Rows[i]["PA60004"].ToString();
+            string sql2 = "SELECT TOP 1 PA25008 FROM hrs_mis.dbo.WPA25 WHERE PA25003 = '" + pa604 + "'";
+            SqlConnection corr = new SqlConnection(hrs);//建立名為conn的連結物件
+            corr.Open();
+            SqlCommand tdiii = new SqlCommand(sql2, corr);
+            DataTable doublecheck = new DataTable();
+            doublecheck.Load(tdiii.ExecuteReader());
+            pa60.Rows[i]["PA604"] = doublecheck.Rows[0][0].ToString();
+            tdiii.Cancel();
+            corr.Dispose();
+            corr.Close();
+            pa60.Rows[i]["time"] = Convert.ToDouble(pa60.Rows[i]["PA60011"].ToString()) / 60;
+            string start = DateTime.Parse(pa60.Rows[i]["PA60007"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string end = DateTime.Parse(pa60.Rows[i]["PA60008"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string app = DateTime.Parse(pa60.Rows[i]["PA60998"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string[] split1 = start.Split('T');
+            string[] split2 = end.Split('T');
+            string[] split3 = app.Split('T');
+            pa60.Rows[i]["start"] = split1[0];
+            pa60.Rows[i]["end"] = split2[0];
+            pa60.Rows[i]["app"] = split3[0];
+            string user = context.Request["user"].ToString().Trim();
+            string user2;
+            string sql;
+            if (dept != "")
+            {
+                if (user != "")
+                {
+                    sql = "SELECT TOP 1 CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + user + "'";
+                }
+                else
+                {
+                    if (pa60.Rows[i]["PA60002"].ToString().Length == 4)
+                    {
+                        user2 = "0" + pa60.Rows[i]["PA60002"].ToString();
+                    }
+                    else
+                    {
+                        user2 = pa60.Rows[i]["PA60002"].ToString();
+                    }
+                    sql = "SELECT TOP 1 Username, CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + user2 + "'";
+                }
+            }
+            else
+            {
+                if (user != "")
+                {
+                    sql = "SELECT TOP 1 CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + user + "'";
+                }
+                else
+                {
+                    sql = "SELECT TOP 1 CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + context.Session["username"].ToString() + "'";
+                }
+            }
+            SqlConnection cor = new SqlConnection(tbi);//建立名為conn的連結物件
+            cor.Open();
+            SqlCommand tdii = new SqlCommand(sql, cor);
+            DataTable cnname = new DataTable();
+            cnname.Load(tdii.ExecuteReader());
+            pa60.Rows[i]["CNname"] = cnname.Rows[0]["CNname"].ToString();
+            pa60.Rows[i]["CONTEN"] = cnname.Rows[0]["CONTEN"].ToString();
+            tdii.Cancel();
+            cor.Dispose();
+            cor.Close();
+        }
+        for (int i = 0; i < dt.Rows.Count; i++)
+        {
+            DataRow row = pa60.NewRow();
+            string user = context.Request["user"].ToString().Trim();
+            string user2;
+            string sql;
+            if (dept != "")
+            {
+                if (user != "")
+                {
+                    sql = "SELECT TOP 1 CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + user + "'";
+                }
+                else
+                {
+                    if (dt.Rows[i]["PA60002"].ToString().Length == 4)
+                    {
+                        user2 = "0" + dt.Rows[i]["PA60002"].ToString();
+                    }
+                    else
+                    {
+                        user2 = dt.Rows[i]["PA60002"].ToString();
+                    }
+                    sql = "SELECT TOP 1 Username, CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + user2 + "'";
+                }
+            }
+            else
+            {
+                if (user != "")
+                {
+                    sql = "SELECT TOP 1 CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + user + "'";
+                }
+                else
+                {
+                    sql = "SELECT TOP 1 CNname, CONTEN FROM tbi.dbo.Users JOIN tbi.dbo.Winton_mf2000 ON a1 = hrs AND online = '1' WHERE Username = '" + context.Session["username"].ToString() + "'";
+                }
+            }
+            SqlConnection mycon = new SqlConnection(tbi);//建立名為conn的連結物件
+            mycon.Open();
+            SqlCommand mycom = new SqlCommand(sql, mycon);
+            DataTable cnname = new DataTable();
+            cnname.Load(mycom.ExecuteReader());
+            row["CNname"] = cnname.Rows[0]["CNname"].ToString();
+            row["CONTEN"] = cnname.Rows[0]["CONTEN"].ToString();
+            mycom.Cancel();
+            mycon.Dispose();
+            mycon.Close();
+            if (dept != "")
+            {
+                if (user != "")
+                {
+                    if (user.StartsWith("0") == true)
+                    {
+                        user2 = user;
+                        user = user.Substring(1);
+                    }
+                    row["PA60002"] = user;
+                }
+                else
+                {
+                    if (cnname.Rows[0]["Username"].ToString().StartsWith("0") == true && cnname.Rows[0]["Username"].ToString().Length == 5)
+                    {
+                        row["PA60002"] = cnname.Rows[0]["Username"].ToString().Substring(1);
+                    }
+                    else
+                    {
+                        row["PA60002"] = cnname.Rows[0]["Username"].ToString();
+                    }
+                }
+            }
+            else
+            {
+                if (user != "")
+                {
+                    if (user.StartsWith("0") == true)
+                    {
+                        user2 = user;
+                        user = user.Substring(1);
+                    }
+                    row["PA60002"] = user;
+                }
+                else
+                {
+                    row["PA60002"] = _select.username.ToString();
+                }
+            }
+            string sql2 = "SELECT TOP 1 PA25008 FROM hrs_mis.dbo.WPA25 WHERE PA25003 = '" + dt.Rows[i]["PA60004"].ToString() + "'";
+            SqlConnection corr = new SqlConnection(hrs);//建立名為conn的連結物件
+            corr.Open();
+            SqlCommand tdiii = new SqlCommand(sql2, corr);
+            DataTable doublecheck = new DataTable();
+            doublecheck.Load(tdiii.ExecuteReader());
+            row["PA604"] = doublecheck.Rows[0][0].ToString();
+            tdiii.Cancel();
+            corr.Dispose();
+            corr.Close();
+            string start = DateTime.Parse(dt.Rows[i]["PA60007"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string end = DateTime.Parse(dt.Rows[i]["PA60008"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string app = DateTime.Parse(dt.Rows[i]["PA60998"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string[] split1 = start.Split('T');
+            string[] split2 = end.Split('T');
+            string[] split3 = app.Split('T');
+            row["start"] = split1[0];
+            row["end"] = split2[0];
+            row["app"] = split3[0];
+            row["time"] = Convert.ToDouble(dt.Rows[i]["PA60011"].ToString()) / 60;
+            row["PA60004"] = dt.Rows[i]["PA60004"].ToString();
+            row["PA60016"] = dt.Rows[i]["PA60016"].ToString();
+            row["PA60038"] = dt.Rows[i]["PA60038"].ToString();
+            row["PA60040"] = dt.Rows[i]["PA60040"].ToString();
+            row["PA60996"] = dt.Rows[i]["PA60996"].ToString();
+            row["PA60042"] = dt.Rows[i]["PA60042"].ToString();
+            row["PA60003"] = dt.Rows[i]["PA60003"].ToString();
+            string b = dt.Rows[i]["PA60039"].ToString();
+            if (b == "0")
+            {
+                row["audit"] = "已通過審核";
+            }
+            else if (b == "1")
+            {
+                row["audit"] = "申請成功";
+            }
+            else if (b == "2")
+            {
+                row["audit"] = "課長或副理核准";
+            }
+            else if (b == "3")
+            {
+                row["audit"] = "最高級主管核准";
+            }
+            else if (b == "5")
+            {
+                row["audit"] = "退件";
+            }
+            pa60.Rows.Add(row);
+        }
+        DataTable dtCopy = pa60.Copy();
+        DataView dv = pa60.DefaultView;
+        dv.Sort = "start DESC";
+        dtCopy = dv.ToTable();
+        string ReturnString = JsonConvert.SerializeObject(dtCopy, Formatting.Indented);
+        context.Response.Write(ReturnString);
+    }
+
+    public void Approval(HttpContext context)
+    {
+        DataTable dt = this.DataTable5(context);
+        dt.Columns.Add("start");
+        dt.Columns.Add("end");
+        dt.Columns.Add("time");
+        dt.Columns.Add("app");
+        dt.Columns.Add("PA604");
+        string pa604;
+        for (int i = 0; i < dt.Rows.Count; i++)
+        {
+            pa604 = dt.Rows[i]["PA60004"].ToString();
+            string sql2 = "SELECT TOP 1 PA25008 FROM hrs_mis.dbo.WPA25 WHERE PA25003 = '" + pa604 + "'";
+            SqlConnection corr = new SqlConnection(hrs);//建立名為conn的連結物件
+            corr.Open();
+            SqlCommand tdiii = new SqlCommand(sql2, corr);
+            DataTable doublecheck = new DataTable();
+            doublecheck.Load(tdiii.ExecuteReader());
+            dt.Rows[i]["PA604"] = doublecheck.Rows[0][0].ToString();
+            dt.Rows[i]["time"] = Convert.ToDouble(dt.Rows[i]["PA60011"].ToString()) / 60;
+            string start = DateTime.Parse(dt.Rows[i]["PA60007"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string end = DateTime.Parse(dt.Rows[i]["PA60008"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string app = DateTime.Parse(dt.Rows[i]["PA60998"].ToString()).ToString("yyyy-MM-dd HH:mm:ss");
+            string[] split1 = start.Split('T');
+            string[] split2 = end.Split('T');
+            string[] split3 = app.Split('T');
+            dt.Rows[i]["start"] = split1[0];
+            dt.Rows[i]["end"] = split2[0];
+            dt.Rows[i]["app"] = split3[0];
+            tdiii.Cancel();
+            corr.Dispose();
+            corr.Close();
+        }
+        string ReturnString = JsonConvert.SerializeObject(dt, Formatting.Indented);
+        context.Response.Write(ReturnString);
+    }
+
+}
